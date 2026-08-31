@@ -427,3 +427,7 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Local developer secrets - appsettings.Development.json holds a local connection
+# string (and, on this machine, a local-only password). Never committed.
+appsettings.Development.json

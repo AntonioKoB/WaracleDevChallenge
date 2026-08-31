@@ -26,3 +26,40 @@ jobs:
 
       - name: Test
         run: dotnet test src/HotelBooking.slnx --no-build --configuration Release
+        env:
+          AZURE_SQL_TEST_CONNECTION_STRING: ${{ secrets.AZURE_SQL_TEST_CONNECTION_STRING }}
+
+      # Only the exact build that was just tested gets published - the deploy job
+      # below deploys this artifact rather than rebuilding, and only for real pushes
+      # to main, never for pull requests.
+      - name: Publish
+        if: github.event_name == 'push'
+        run: >
+          dotnet publish src/HotelBooking.Api/HotelBooking.Api.csproj
+          --no-restore --no-build --configuration Release
+          --output ${{ github.workspace }}/publish
+
+      - name: Upload publish artifact
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: webapp
+          path: ${{ github.workspace }}/publish
+
+  deploy:
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download publish artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: webapp
+          path: ${{ github.workspace }}/publish
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: WaracleHotelBooking
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: ${{ github.workspace }}/publish

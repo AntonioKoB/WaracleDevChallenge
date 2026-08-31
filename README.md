@@ -38,6 +38,42 @@ No distributed lock service, no message queue. The guarantee holds the same whet
 
 Repository interfaces (`IHotelRepository`, `IRoomRepository`, `IReservationRepository`) live in `HotelBooking.Domain`. Their EF Core implementations live in `HotelBooking.Infrastructure` and get injected into the API via DI. This keeps the domain rules, and their unit tests, free of any dependency on EF Core or a real database.
 
+## Running locally
+
+`Database.Migrate()` runs at startup, so an empty database is enough - the schema gets created automatically on first run. `appsettings.Development.json` is gitignored (it ends up holding a real connection string and password), so a fresh clone needs one set up locally.
+
+1. **Get a SQL Server instance running.** Any of these work: a local SQL Server install (Developer or Express edition), SQL Server LocalDB, or a Docker container:
+   ```
+   docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=<a-strong-password>" -p 1433:1433 --name sql-local -d mcr.microsoft.com/mssql/server:2022-latest
+   ```
+
+2. **Create a database and a login scoped to it**, rather than pointing the app at `sa`:
+   ```sql
+   CREATE DATABASE WaracleLocalDB;
+   GO
+   CREATE LOGIN AppUser WITH PASSWORD = '<a-strong-password>';
+   GO
+   USE WaracleLocalDB;
+   CREATE USER AppUser FOR LOGIN AppUser;
+   ALTER ROLE db_owner ADD MEMBER AppUser;
+   ```
+   This mirrors how the deployed version works too: the app's login only ever has rights inside its own database, never across the whole server.
+
+3. **Add a `ConnectionStrings:DefaultConnection` entry to `src/HotelBooking.Api/appsettings.Development.json`** (create the file if it isn't there yet):
+   ```json
+   {
+     "ConnectionStrings": {
+       "DefaultConnection": "Server=localhost;Database=WaracleLocalDB;User Id=AppUser;Password=<a-strong-password>;TrustServerCertificate=True;MultipleActiveResultSets=true"
+     }
+   }
+   ```
+   `TrustServerCertificate=True` is needed because a local SQL Server instance's certificate usually isn't signed by a CA the client already trusts.
+
+4. **Run it:**
+   ```
+   dotnet run --project src/HotelBooking.Api
+   ```
+
 ## Azure footprint
 
 Everything here fits inside Azure's free tiers.
