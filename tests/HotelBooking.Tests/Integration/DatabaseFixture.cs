@@ -25,7 +25,10 @@ public sealed class DatabaseFixture : IAsyncLifetime
     public HotelBookingDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<HotelBookingDbContext>()
-            .UseSqlServer(_connectionString)
+            .UseSqlServer(_connectionString, sqlOptions => sqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 8,
+                maxRetryDelay: TimeSpan.FromSeconds(30),
+                errorNumbersToAdd: null))
             .Options;
 
         return new HotelBookingDbContext(options);
