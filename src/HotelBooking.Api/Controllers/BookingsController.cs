@@ -1,6 +1,5 @@
 using HotelBooking.Api.Contracts;
 using HotelBooking.Domain.Entities;
-using HotelBooking.Domain.Exceptions;
 using HotelBooking.Domain.Repositories;
 using Microsoft.AspNetCore.Mvc;
 
@@ -10,7 +9,11 @@ namespace HotelBooking.Api.Controllers;
 [Route("api/bookings")]
 public class BookingsController(IRoomRepository roomRepository, IReservationRepository reservationRepository) : ControllerBase
 {
-    /// <summary>Books a room for the given dates and guests.</summary>
+    /// <summary>
+    /// Books a room for the given dates and guests. Invalid dates, capacity exceeded, and
+    /// a genuine double-booking conflict are all raised as domain exceptions and mapped to
+    /// the right status code by the global exception handler, not caught here.
+    /// </summary>
     [HttpPost]
     [ProducesResponseType<BookingResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -27,28 +30,13 @@ public class BookingsController(IRoomRepository roomRepository, IReservationRepo
 
         var guests = request.Guests.Select(g => new Guest(g.Name, g.Email)).ToList();
 
-        try
-        {
-            var reservation = Reservation.Create(room, request.CheckInDate, request.CheckOutDate, guests);
-            await reservationRepository.AddAsync(reservation, cancellationToken);
+        var reservation = Reservation.Create(room, request.CheckInDate, request.CheckOutDate, guests);
+        await reservationRepository.AddAsync(reservation, cancellationToken);
 
-            return CreatedAtAction(
-                nameof(GetByReference),
-                new { bookingReference = reservation.BookingReference },
-                ToResponse(reservation));
-        }
-        catch (RoomCapacityExceededException ex)
-        {
-            return Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest);
-        }
-        catch (InvalidReservationDatesException ex)
-        {
-            return Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest);
-        }
-        catch (BookingConflictException ex)
-        {
-            return Problem(detail: ex.Message, statusCode: StatusCodes.Status409Conflict);
-        }
+        return CreatedAtAction(
+            nameof(GetByReference),
+            new { bookingReference = reservation.BookingReference },
+            ToResponse(reservation));
     }
 
     /// <summary>Finds a booking by its reference.</summary>

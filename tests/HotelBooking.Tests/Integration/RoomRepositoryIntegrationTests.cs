@@ -12,13 +12,13 @@ public class RoomRepositoryIntegrationTests(DatabaseFixture fixture)
         await using var context = fixture.CreateContext();
         await using var data = await IntegrationTestData.CreateAsync(context);
 
-        var reservationRepository = new ReservationRepository(context);
+        var reservationRepository = new ReservationRepository(context, TestResilience.Pipeline);
         var reservation = Reservation.Create(
             data.Room, new DateOnly(2027, 4, 10), new DateOnly(2027, 4, 13),
             [new Guest("Guest One", "guest.one@example.com")]);
         await reservationRepository.AddAsync(reservation);
 
-        var roomRepository = new RoomRepository(context);
+        var roomRepository = new RoomRepository(context, TestResilience.Pipeline);
         var available = await roomRepository.GetAvailableRoomsAsync(
             new DateOnly(2027, 4, 11), new DateOnly(2027, 4, 12), guestCount: 1, hotelId: data.Hotel.Id);
 
@@ -31,7 +31,7 @@ public class RoomRepositoryIntegrationTests(DatabaseFixture fixture)
         await using var context = fixture.CreateContext();
         await using var data = await IntegrationTestData.CreateAsync(context);
 
-        var roomRepository = new RoomRepository(context);
+        var roomRepository = new RoomRepository(context, TestResilience.Pipeline);
         var available = await roomRepository.GetAvailableRoomsAsync(
             new DateOnly(2027, 5, 1), new DateOnly(2027, 5, 3), guestCount: 1, hotelId: data.Hotel.Id);
 
@@ -44,7 +44,7 @@ public class RoomRepositoryIntegrationTests(DatabaseFixture fixture)
         await using var context = fixture.CreateContext();
         await using var data = await IntegrationTestData.CreateAsync(context, capacity: 1);
 
-        var roomRepository = new RoomRepository(context);
+        var roomRepository = new RoomRepository(context, TestResilience.Pipeline);
         var available = await roomRepository.GetAvailableRoomsAsync(
             new DateOnly(2027, 6, 1), new DateOnly(2027, 6, 3), guestCount: 2, hotelId: data.Hotel.Id);
 
@@ -58,7 +58,7 @@ public class RoomRepositoryIntegrationTests(DatabaseFixture fixture)
         await using var context = fixture.CreateContext();
         await using var data = await IntegrationTestData.CreateAsync(context);
 
-        var roomRepository = new RoomRepository(context);
+        var roomRepository = new RoomRepository(context, TestResilience.Pipeline);
         var available = await roomRepository.GetAvailableRoomsAsync(
             new DateOnly(2027, 7, 1), new DateOnly(2027, 7, 3), guestCount: 1);
 

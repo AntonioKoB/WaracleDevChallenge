@@ -117,6 +117,26 @@ public class BookingsApiTests(ApiFactory apiFactory, DatabaseFixture databaseFix
     }
 
     [IntegrationFact]
+    public async Task BookRoom_WithCheckOutOnOrBeforeCheckIn_ReturnsBadRequest()
+    {
+        // Confirms InvalidReservationDatesException, thrown from Reservation.Create deep in
+        // the domain layer, actually reaches the client as a 400 via the global exception
+        // handler - not just that the domain rule itself is correct (already covered by
+        // ReservationTests), but that the whole pipeline wires it through correctly.
+        await using var context = databaseFixture.CreateContext();
+        await using var data = await IntegrationTestData.CreateAsync(context);
+        using var client = apiFactory.CreateClient();
+
+        var request = new BookRoomRequest(
+            data.Room.Id, new DateOnly(2027, 10, 5), new DateOnly(2027, 10, 5),
+            [new GuestRequest("Guest One", "guest.one@example.com")]);
+
+        var response = await client.PostAsJsonAsync("/api/bookings", request);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [IntegrationFact]
     public async Task BookRoom_WhenNightIsAlreadyBooked_ReturnsConflict()
     {
         await using var context = databaseFixture.CreateContext();

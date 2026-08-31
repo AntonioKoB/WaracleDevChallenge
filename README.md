@@ -106,7 +106,8 @@ Deployment is manual, on purpose. For a single App Service and a single database
 
 - EF Core connection resiliency (`EnableRetryOnFailure`) handles transient SQL faults such as throttling or failover.
 - A Polly circuit breaker wraps the database-facing calls, so the API fails fast instead of piling up timeouts if the database is genuinely unreachable.
-- These are kept distinct from the overbooking conflict above: a duplicate-key violation is a correct business outcome, not a fault, and it must never get retried.
+- These are kept distinct from the overbooking conflict above: a duplicate-key violation is a correct business outcome, not a fault, and it must never get retried. The circuit breaker's `ShouldHandle` only counts `SqlException`/`TimeoutException` as failures, so a `BookingConflictException` never trips it either, even under heavy contention.
+- A global exception handler maps domain exceptions to the right HTTP status consistently across every endpoint (400 for bad dates or capacity, 409 for a booking conflict, 503 if the circuit breaker is open), instead of each controller action needing its own try/catch for the same handful of cases.
 
 ## How this was built
 

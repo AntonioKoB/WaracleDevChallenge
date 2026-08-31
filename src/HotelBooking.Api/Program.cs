@@ -1,8 +1,10 @@
 using System.Reflection;
+using HotelBooking.Api;
 using HotelBooking.Api.ModelBinding;
 using HotelBooking.Domain.Repositories;
 using HotelBooking.Infrastructure.Persistence;
 using HotelBooking.Infrastructure.Repositories;
+using HotelBooking.Infrastructure.Resilience;
 using HotelBooking.Infrastructure.Seeding;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
@@ -41,10 +43,14 @@ builder.Services.AddDbContext<HotelBookingDbContext>(options =>
         builder.Configuration.GetConnectionString("DefaultConnection"),
         sqlOptions => sqlOptions.EnableRetryOnFailure()));
 
+builder.Services.AddSingleton<IDatabaseResiliencePipeline, DatabaseResiliencePipeline>();
 builder.Services.AddScoped<IHotelRepository, HotelRepository>();
 builder.Services.AddScoped<IRoomRepository, RoomRepository>();
 builder.Services.AddScoped<IReservationRepository, ReservationRepository>();
 builder.Services.AddScoped<TestDataSeeder>();
+
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
 
 var app = builder.Build();
 
@@ -65,6 +71,8 @@ app.UseSwaggerUI(options =>
 });
 
 app.MapGet("/", () => Results.Redirect("/swagger"));
+
+app.UseExceptionHandler();
 
 app.UseHttpsRedirection();
 

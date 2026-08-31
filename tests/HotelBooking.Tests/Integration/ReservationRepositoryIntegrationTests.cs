@@ -12,7 +12,7 @@ public class ReservationRepositoryIntegrationTests(DatabaseFixture fixture)
     {
         await using var context = fixture.CreateContext();
         await using var data = await IntegrationTestData.CreateAsync(context);
-        var repository = new ReservationRepository(context);
+        var repository = new ReservationRepository(context, TestResilience.Pipeline);
 
         var checkIn = new DateOnly(2027, 1, 10);
         var checkOut = new DateOnly(2027, 1, 12);
@@ -32,7 +32,7 @@ public class ReservationRepositoryIntegrationTests(DatabaseFixture fixture)
         // the same day the first one ends must not conflict.
         await using var context = fixture.CreateContext();
         await using var data = await IntegrationTestData.CreateAsync(context);
-        var repository = new ReservationRepository(context);
+        var repository = new ReservationRepository(context, TestResilience.Pipeline);
 
         var first = Reservation.Create(
             data.Room, new DateOnly(2027, 2, 1), new DateOnly(2027, 2, 3),
@@ -53,7 +53,7 @@ public class ReservationRepositoryIntegrationTests(DatabaseFixture fixture)
     {
         await using var context = fixture.CreateContext();
         await using var data = await IntegrationTestData.CreateAsync(context);
-        var repository = new ReservationRepository(context);
+        var repository = new ReservationRepository(context, TestResilience.Pipeline);
 
         var reservation = Reservation.Create(
             data.Room, new DateOnly(2027, 3, 1), new DateOnly(2027, 3, 4),
@@ -61,7 +61,7 @@ public class ReservationRepositoryIntegrationTests(DatabaseFixture fixture)
         await repository.AddAsync(reservation);
 
         await using var readContext = fixture.CreateContext();
-        var readRepository = new ReservationRepository(readContext);
+        var readRepository = new ReservationRepository(readContext, TestResilience.Pipeline);
 
         var found = await readRepository.GetByBookingReferenceAsync(reservation.BookingReference);
 
@@ -76,7 +76,7 @@ public class ReservationRepositoryIntegrationTests(DatabaseFixture fixture)
     public async Task GetByBookingReferenceAsync_WhenReferenceIsUnknown_ReturnsNull()
     {
         await using var context = fixture.CreateContext();
-        var repository = new ReservationRepository(context);
+        var repository = new ReservationRepository(context, TestResilience.Pipeline);
 
         var found = await repository.GetByBookingReferenceAsync("000000000");
 

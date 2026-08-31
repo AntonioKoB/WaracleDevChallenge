@@ -2,53 +2,59 @@ using HotelBooking.Domain.Entities;
 using HotelBooking.Domain.Exceptions;
 using HotelBooking.Domain.Repositories;
 using HotelBooking.Infrastructure.Persistence;
+using HotelBooking.Infrastructure.Resilience;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace HotelBooking.Infrastructure.Repositories;
 
-public class ReservationRepository(HotelBookingDbContext context) : IReservationRepository
+public class ReservationRepository(HotelBookingDbContext context, IDatabaseResiliencePipeline resilience) : IReservationRepository
 {
     private const string BookingReferenceIndex = "IX_Reservations_BookingReference";
     private const string OverlappingNightIndex = "IX_ReservationNights_RoomId_StayDate";
     private const int MaxBookingReferenceAttempts = 3;
 
-    public async Task AddAsync(Reservation reservation, CancellationToken cancellationToken = default)
-    {
-        var current = reservation;
-
-        for (var attempt = 1; ; attempt++)
+    public Task AddAsync(Reservation reservation, CancellationToken cancellationToken = default) =>
+        resilience.ExecuteAsync(async ct =>
         {
-            context.Reservations.Add(current);
+            var current = reservation;
 
-            try
+            for (var attempt = 1; ; attempt++)
             {
-                await context.SaveChangesAsync(cancellationToken);
-                return;
+                context.Reservations.Add(current);
+
+                try
+                {
+                    await context.SaveChangesAsync(ct);
+                    return;
+                }
+                catch (DbUpdateException ex) when (IsUniqueIndexViolation(ex, OverlappingNightIndex))
+                {
+                    // A genuine double-booking: another request won the race for this room/night.
+                    // Not a database fault, so this must never trip the circuit breaker - it
+                    // isn't a SqlException by the time it gets here, so it naturally won't.
+                    throw new BookingConflictException();
+                }
+                catch (DbUpdateException ex) when (IsUniqueIndexViolation(ex, BookingReferenceIndex) && attempt < MaxBookingReferenceAttempts)
+                {
+                    // A collision on the randomly generated reference itself (see
+                    // BookingReferenceGenerator) - astronomically unlikely, but retried rather
+                    // than assumed impossible. Only the failed reservation graph is detached;
+                    // the room (and its hotel/room type) stay tracked as they were.
+                    DetachGraph(current);
+                    current = Reservation.Create(current.Room, current.CheckInDate, current.CheckOutDate, current.Guests);
+                }
             }
-            catch (DbUpdateException ex) when (IsUniqueIndexViolation(ex, OverlappingNightIndex))
-            {
-                // A genuine double-booking: another request won the race for this room/night.
-                throw new BookingConflictException();
-            }
-            catch (DbUpdateException ex) when (IsUniqueIndexViolation(ex, BookingReferenceIndex) && attempt < MaxBookingReferenceAttempts)
-            {
-                // A collision on the randomly generated reference itself (see
-                // BookingReferenceGenerator) - astronomically unlikely, but retried rather
-                // than assumed impossible. Only the failed reservation graph is detached;
-                // the room (and its hotel/room type) stay tracked as they were.
-                DetachGraph(current);
-                current = Reservation.Create(current.Room, current.CheckInDate, current.CheckOutDate, current.Guests);
-            }
-        }
-    }
+        }, cancellationToken);
 
     public Task<Reservation?> GetByBookingReferenceAsync(string bookingReference, CancellationToken cancellationToken = default) =>
-        context.Reservations
-            .Include(r => r.Room).ThenInclude(room => room.Hotel)
-            .Include(r => r.Room).ThenInclude(room => room.RoomType)
-            .Include(r => r.Guests)
-            .FirstOrDefaultAsync(r => r.BookingReference == bookingReference, cancellationToken);
+        resilience.ExecuteAsync(
+            ct => context.Reservations
+                .Include(r => r.Room).ThenInclude(room => room.Hotel)
+                .Include(r => r.Room).ThenInclude(room => room.RoomType)
+                .Include(r => r.Guests)
+                .FirstOrDefaultAsync(r => r.BookingReference == bookingReference, ct),
+            cancellationToken);
 
     private void DetachGraph(Reservation reservation)
     {

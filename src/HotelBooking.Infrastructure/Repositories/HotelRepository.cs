@@ -1,24 +1,28 @@
 using HotelBooking.Domain.Entities;
 using HotelBooking.Domain.Repositories;
 using HotelBooking.Infrastructure.Persistence;
+using HotelBooking.Infrastructure.Resilience;
 using Microsoft.EntityFrameworkCore;
 
 namespace HotelBooking.Infrastructure.Repositories;
 
-public class HotelRepository(HotelBookingDbContext context) : IHotelRepository
+public class HotelRepository(HotelBookingDbContext context, IDatabaseResiliencePipeline resilience) : IHotelRepository
 {
-    public async Task<IReadOnlyCollection<Hotel>> SearchByNameAsync(string name, CancellationToken cancellationToken = default)
-    {
-        var pattern = ToWildcardPattern(name);
+    public Task<IReadOnlyCollection<Hotel>> SearchByNameAsync(string name, CancellationToken cancellationToken = default) =>
+        resilience.ExecuteAsync(async ct =>
+        {
+            var pattern = ToWildcardPattern(name);
 
-        return await context.Hotels
-            .Where(h => EF.Functions.Like(h.Name, pattern))
-            .OrderBy(h => h.Name)
-            .ToListAsync(cancellationToken);
-    }
+            return (IReadOnlyCollection<Hotel>)await context.Hotels
+                .Where(h => EF.Functions.Like(h.Name, pattern))
+                .OrderBy(h => h.Name)
+                .ToListAsync(ct);
+        }, cancellationToken);
 
     public Task<Hotel?> GetByIdAsync(int id, CancellationToken cancellationToken = default) =>
-        context.Hotels.FirstOrDefaultAsync(h => h.Id == id, cancellationToken);
+        resilience.ExecuteAsync(
+            ct => context.Hotels.FirstOrDefaultAsync(h => h.Id == id, ct),
+            cancellationToken);
 
     /// <summary>
     /// Turns free-text input into a SQL LIKE pattern: wrapped in wildcards on both ends,

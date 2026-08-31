@@ -21,7 +21,7 @@ public class HotelRepositoryIntegrationTests(DatabaseFixture fixture)
     {
         await using var context = fixture.CreateContext();
         var hotel = await CreateHotelAsync(context, $"Test Hotel {Guid.NewGuid():N}");
-        var repository = new HotelRepository(context);
+        var repository = new HotelRepository(context, TestResilience.Pipeline);
 
         var results = await repository.SearchByNameAsync(hotel.Name);
 
@@ -36,7 +36,7 @@ public class HotelRepositoryIntegrationTests(DatabaseFixture fixture)
         await using var context = fixture.CreateContext();
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var hotel = await CreateHotelAsync(context, $"The Grand Waracle {suffix}");
-        var repository = new HotelRepository(context);
+        var repository = new HotelRepository(context, TestResilience.Pipeline);
 
         var results = await repository.SearchByNameAsync("WARACLE");
 
@@ -51,7 +51,7 @@ public class HotelRepositoryIntegrationTests(DatabaseFixture fixture)
         await using var context = fixture.CreateContext();
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var hotel = await CreateHotelAsync(context, $"The Grand Waracle Hotel {suffix}");
-        var repository = new HotelRepository(context);
+        var repository = new HotelRepository(context, TestResilience.Pipeline);
 
         // "Waracle" sits between "Grand" and "Hotel" in the real name - the space in the
         // search term should act as a wildcard, not require an exact adjacent match.
@@ -68,7 +68,7 @@ public class HotelRepositoryIntegrationTests(DatabaseFixture fixture)
         await using var context = fixture.CreateContext();
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var hotel = await CreateHotelAsync(context, $"100% Waracle Suites {suffix}");
-        var repository = new HotelRepository(context);
+        var repository = new HotelRepository(context, TestResilience.Pipeline);
 
         var results = await repository.SearchByNameAsync("100%");
 
@@ -81,7 +81,7 @@ public class HotelRepositoryIntegrationTests(DatabaseFixture fixture)
     public async Task SearchByNameAsync_WithNoMatch_ReturnsEmptyCollection()
     {
         await using var context = fixture.CreateContext();
-        var repository = new HotelRepository(context);
+        var repository = new HotelRepository(context, TestResilience.Pipeline);
 
         var results = await repository.SearchByNameAsync($"NoSuchHotel{Guid.NewGuid():N}");
 
