@@ -1,8 +1,15 @@
 <Solution>
-  <Project Path="HotelBooking.Api/HotelBooking.Api.csproj" />
-  <Project Path="HotelBooking.Domain/HotelBooking.Domain.csproj" />
-  <Project Path="HotelBooking.Infrastructure/HotelBooking.Infrastructure.csproj" />
+  <Folder Name="/SolutionFolder/">
+    <File Path="../README.md" />
+  </Folder>
+  <Folder Name="/SolutionFolder/.github/" />
+  <Folder Name="/SolutionFolder/.github/workflows/">
+    <File Path="../.github/workflows/ci.yml" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="../tests/HotelBooking.Tests/HotelBooking.Tests.csproj" />
   </Folder>
+  <Project Path="HotelBooking.Api/HotelBooking.Api.csproj" />
+  <Project Path="HotelBooking.Domain/HotelBooking.Domain.csproj" />
+  <Project Path="HotelBooking.Infrastructure/HotelBooking.Infrastructure.csproj" />
 </Solution>
