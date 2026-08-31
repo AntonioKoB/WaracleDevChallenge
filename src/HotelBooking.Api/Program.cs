@@ -1,4 +1,5 @@
 using System.Reflection;
+using HotelBooking.Api.ModelBinding;
 using HotelBooking.Domain.Repositories;
 using HotelBooking.Infrastructure.Persistence;
 using HotelBooking.Infrastructure.Repositories;
@@ -10,7 +11,13 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{
+    // Query-string DateOnly values must be unambiguous (yyyy-MM-dd) - the default binder
+    // parses using the server's current culture, which would silently read "07/09/2026" as
+    // 7 September or 9 July depending on where this happens to be hosted.
+    options.ModelBinderProviders.Insert(0, new IsoDateOnlyModelBinderProvider());
+});
 
 builder.Services.AddSwaggerGen(options =>
 {
@@ -66,3 +73,7 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+// Exposes the top-level statements' generated Program class so WebApplicationFactory<Program>
+// can find it from the test project.
+public partial class Program;

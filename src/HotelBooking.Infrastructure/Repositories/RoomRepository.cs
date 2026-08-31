@@ -14,21 +14,29 @@ public class RoomRepository(HotelBookingDbContext context) : IRoomRepository
             .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
 
     public async Task<IReadOnlyCollection<Room>> GetAvailableRoomsAsync(
-        int hotelId,
         DateOnly checkInDate,
         DateOnly checkOutDate,
         int guestCount,
+        int? hotelId = null,
         CancellationToken cancellationToken = default)
     {
-        return await context.Rooms
+        var query = context.Rooms
             .Include(r => r.RoomType)
             .Include(r => r.Hotel)
-            .Where(r => r.HotelId == hotelId && r.RoomType.Capacity >= guestCount)
+            .Where(r => r.RoomType.Capacity >= guestCount);
+
+        if (hotelId is not null)
+        {
+            query = query.Where(r => r.HotelId == hotelId);
+        }
+
+        return await query
             // A room is available if none of its booked nights fall inside the requested
             // stay - this mirrors the (RoomId, StayDate) uniqueness the database enforces.
             .Where(r => !context.ReservationNights.Any(n =>
                 n.RoomId == r.Id && n.StayDate >= checkInDate && n.StayDate < checkOutDate))
-            .OrderBy(r => r.Number)
+            .OrderBy(r => r.Hotel.Name)
+            .ThenBy(r => r.Number)
             .ToListAsync(cancellationToken);
     }
 }

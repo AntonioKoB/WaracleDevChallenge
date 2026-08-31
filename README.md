@@ -11,6 +11,23 @@ A hotel room booking API built with ASP.NET Core and EF Core, for the Waracle ba
 - Booking references are unique, with no overlapping bookings at any given time.
 - A room cannot be occupied by more people than its capacity.
 
+## API endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/hotels?name=` | Search hotels by name - case-insensitive, matches anywhere in the name |
+| GET | `/api/rooms/available?checkInDate=&checkOutDate=&guests=&hotelId=` | Find available rooms for a stay. `hotelId` is optional |
+| POST | `/api/bookings` | Book a room |
+| GET | `/api/bookings/{bookingReference}` | Find a booking by its reference |
+| POST | `/api/testing/seed` | Testing only: reset and populate sample data |
+| POST | `/api/testing/reset` | Testing only: clear all data |
+
+**On hotel search returning a list, not a single hotel:** the brief says "find a hotel", singular, but a substring/wildcard search can genuinely match more than one hotel - a search string doesn't identify one hotel the way an id does. `waracle` matches "The Grand Waracle"; the search term is implicitly wrapped with wildcards on both ends, is case-insensitive, and treats a space in the search term as a wildcard too, so "grand waracle" still matches even with other words in between. An empty result is a 200 with an empty list, not a 404 - "no matches" is a normal outcome for a search, not a missing resource.
+
+**On "find available rooms" not being scoped to a hotel by default:** the brief asks to "find available rooms between two dates for a given number of people" and never says "at a given hotel" - that's an assumption worth naming explicitly rather than quietly baking in. The chosen shape mirrors how a booking site actually gets used: search broadly by dates and party size first, across every hotel, then narrow down. `hotelId` is there as an optional filter for the case where the hotel is already decided, rather than as a second, separate endpoint - a hotel-scoped search is just a filtered version of the same query, not a genuinely different one, so it didn't seem to earn its own route.
+
+**On date query parameters being strict about format:** `checkInDate` and `checkOutDate` only accept `yyyy-MM-dd` and reject anything else with a 400, rather than using ASP.NET Core's default query-string binding. The default binder parses using the server's current culture, so `07/09/2026` could silently mean 7 September or 9 July depending on where the API happens to be hosted - it isn't a hypothetical, testing against a real deployment turned up exactly this: a booked room was returned as "available" because the date got parsed as the wrong month, and the search silently ran against a date range that genuinely didn't conflict. An API shouldn't guess at an ambiguous date; it should say so.
+
 ## Data model
 
 | Table | Columns | Notes |

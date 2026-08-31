@@ -20,7 +20,7 @@ public class RoomRepositoryIntegrationTests(DatabaseFixture fixture)
 
         var roomRepository = new RoomRepository(context);
         var available = await roomRepository.GetAvailableRoomsAsync(
-            data.Hotel.Id, new DateOnly(2027, 4, 11), new DateOnly(2027, 4, 12), guestCount: 1);
+            new DateOnly(2027, 4, 11), new DateOnly(2027, 4, 12), guestCount: 1, hotelId: data.Hotel.Id);
 
         Assert.DoesNotContain(available, r => r.Id == data.Room.Id);
     }
@@ -33,7 +33,7 @@ public class RoomRepositoryIntegrationTests(DatabaseFixture fixture)
 
         var roomRepository = new RoomRepository(context);
         var available = await roomRepository.GetAvailableRoomsAsync(
-            data.Hotel.Id, new DateOnly(2027, 5, 1), new DateOnly(2027, 5, 3), guestCount: 1);
+            new DateOnly(2027, 5, 1), new DateOnly(2027, 5, 3), guestCount: 1, hotelId: data.Hotel.Id);
 
         Assert.Contains(available, r => r.Id == data.Room.Id);
     }
@@ -46,8 +46,22 @@ public class RoomRepositoryIntegrationTests(DatabaseFixture fixture)
 
         var roomRepository = new RoomRepository(context);
         var available = await roomRepository.GetAvailableRoomsAsync(
-            data.Hotel.Id, new DateOnly(2027, 6, 1), new DateOnly(2027, 6, 3), guestCount: 2);
+            new DateOnly(2027, 6, 1), new DateOnly(2027, 6, 3), guestCount: 2, hotelId: data.Hotel.Id);
 
         Assert.DoesNotContain(available, r => r.Id == data.Room.Id);
+    }
+
+    [IntegrationFact]
+    public async Task GetAvailableRoomsAsync_WithNoHotelId_FindsTheRoomAcrossAnyHotel()
+    {
+        // No hotelId at all - this is the booking.com-style "search everywhere" case.
+        await using var context = fixture.CreateContext();
+        await using var data = await IntegrationTestData.CreateAsync(context);
+
+        var roomRepository = new RoomRepository(context);
+        var available = await roomRepository.GetAvailableRoomsAsync(
+            new DateOnly(2027, 7, 1), new DateOnly(2027, 7, 3), guestCount: 1);
+
+        Assert.Contains(available, r => r.Id == data.Room.Id);
     }
 }

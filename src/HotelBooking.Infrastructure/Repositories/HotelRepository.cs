@@ -7,9 +7,34 @@ namespace HotelBooking.Infrastructure.Repositories;
 
 public class HotelRepository(HotelBookingDbContext context) : IHotelRepository
 {
-    public Task<Hotel?> GetByNameAsync(string name, CancellationToken cancellationToken = default) =>
-        context.Hotels.FirstOrDefaultAsync(h => h.Name == name, cancellationToken);
+    public async Task<IReadOnlyCollection<Hotel>> SearchByNameAsync(string name, CancellationToken cancellationToken = default)
+    {
+        var pattern = ToWildcardPattern(name);
+
+        return await context.Hotels
+            .Where(h => EF.Functions.Like(h.Name, pattern))
+            .OrderBy(h => h.Name)
+            .ToListAsync(cancellationToken);
+    }
 
     public Task<Hotel?> GetByIdAsync(int id, CancellationToken cancellationToken = default) =>
         context.Hotels.FirstOrDefaultAsync(h => h.Id == id, cancellationToken);
+
+    /// <summary>
+    /// Turns free-text input into a SQL LIKE pattern: wrapped in wildcards on both ends,
+    /// with spaces themselves also acting as wildcards. LIKE's own special characters
+    /// ([, %, _) are bracket-escaped first, in that order, so a literal one in the search
+    /// term isn't misread as pattern syntax. Case-insensitivity relies on the database's
+    /// default collation (case-insensitive on Azure SQL and most SQL Server installs).
+    /// </summary>
+    private static string ToWildcardPattern(string term)
+    {
+        var escaped = term
+            .Replace("[", "[[]")
+            .Replace("%", "[%]")
+            .Replace("_", "[_]")
+            .Replace(' ', '%');
+
+        return $"%{escaped}%";
+    }
 }
