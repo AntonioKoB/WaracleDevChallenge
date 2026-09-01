@@ -109,6 +109,15 @@ Deployment is manual, on purpose. For a single App Service and a single database
 - These are kept distinct from the overbooking conflict above: a duplicate-key violation is a correct business outcome, not a fault, and it must never get retried. The circuit breaker's `ShouldHandle` only counts `SqlException`/`TimeoutException` as failures, so a `BookingConflictException` never trips it either, even under heavy contention.
 - A global exception handler maps domain exceptions to the right HTTP status consistently across every endpoint (400 for bad dates or capacity, 409 for a booking conflict, 503 if the circuit breaker is open), instead of each controller action needing its own try/catch for the same handful of cases.
 
+## Observability
+
+Traces and logs go to Application Insights via `Azure.Monitor.OpenTelemetry.AspNetCore` - the officially GA distro that uses the OpenTelemetry SDK for instrumentation rather than the older, Azure-specific Application Insights SDK. Two reasons for OpenTelemetry over the classic SDK:
+
+- It's Microsoft's own current recommendation for new applications; the classic SDK still works but isn't where new investment goes.
+- The distro still exports through Azure Monitor's own ingestion path (not generic OTLP), which is what keeps Live Metrics, Application Map, and Smart Detection working in the Portal - a hand-rolled OTLP exporter pointed at Azure Monitor's newer direct-OTLP-ingestion endpoint would be more vendor-portable, but wouldn't light up those curated experiences the same way, and isn't needed here.
+
+Wiring only activates when `APPLICATIONINSIGHTS_CONNECTION_STRING` is actually present in configuration - the same pattern as the database connection string, so a local run without one configured is a clean no-op rather than a startup failure.
+
 ## How this was built
 
 The solution is being built as a sequence of steps, each one buildable and reviewable on its own. The CI/CD pipeline grows the same way: a build gate from step 02, test running added once step 03 has unit tests, and deployment added once step 04 has an actual database-backed app and real Azure resources to target. Azure deployment starts at step 04, not the last step, so everything built after that point is live-testable as it lands.
