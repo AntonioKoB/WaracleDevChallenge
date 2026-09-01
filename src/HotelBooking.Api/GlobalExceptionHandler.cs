@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using HotelBooking.Domain.Exceptions;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
@@ -17,12 +18,21 @@ public class GlobalExceptionHandler(IProblemDetailsService problemDetailsService
     {
         var (statusCode, title, detail) = Map(exception);
 
-        if (statusCode == StatusCodes.Status500InternalServerError)
+        if (statusCode >= StatusCodes.Status500InternalServerError)
         {
-            logger.LogError(exception, "Unhandled exception handling {Path}", httpContext.Request.Path);
+            // A genuine fault - either truly unexpected, or the circuit breaker telling us
+            // the database is down. Recorded as real exception telemetry (not just a log
+            // line), which is what actually makes it show up in Application Insights'
+            // exceptions table and Failures view, not just Traces.
+            logger.LogError(exception, "{ExceptionType} handling {Path}", exception.GetType().Name, httpContext.Request.Path);
+            Activity.Current?.SetStatus(ActivityStatusCode.Error, exception.Message);
+            Activity.Current?.AddException(exception);
         }
         else
         {
+            // A 400/409 from a domain rule or a booking conflict is a correct business
+            // outcome, not a fault - it stays a log line, not exception telemetry, so it
+            // doesn't pollute Failures with things that aren't actually failures.
             logger.LogWarning(exception, "{ExceptionType} handling {Path}", exception.GetType().Name, httpContext.Request.Path);
         }
 

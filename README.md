@@ -2,6 +2,8 @@
 
 A hotel room booking API built with ASP.NET Core and EF Core, for the Waracle backend developer challenge.
 
+**Live on Azure**: [waraclehotelbooking-apdaaheshwdeabbu.ukwest-01.azurewebsites.net](https://waraclehotelbooking-apdaaheshwdeabbu.ukwest-01.azurewebsites.net) - the root URL redirects straight to Swagger. No authentication needed, per the brief. Hosted on the free tier, so the first request after a period of inactivity may take a few seconds to wake up.
+
 ## Business rules
 
 - Hotels have 3 room types: single, double, deluxe.
@@ -91,6 +93,14 @@ Repository interfaces (`IHotelRepository`, `IRoomRepository`, `IReservationRepos
    dotnet run --project src/HotelBooking.Api
    ```
 
+### Running the tests
+
+```
+dotnet test src/HotelBooking.slnx
+```
+
+Domain rule unit tests always run. The integration and end-to-end tests, the ones that hit a real database, only run when the `AZURE_SQL_TEST_CONNECTION_STRING` environment variable points at a real SQL Server instance - without it, they skip cleanly rather than failing, so the rest of the suite still runs on a machine with nothing configured. In CI, that variable comes from a GitHub Actions secret pointing at a dedicated Azure SQL free-tier database, separate from the production one.
+
 ## Azure footprint
 
 Everything here fits inside Azure's free tiers.
@@ -118,9 +128,21 @@ Traces and logs go to Application Insights via `Azure.Monitor.OpenTelemetry.AspN
 
 Wiring only activates when `APPLICATIONINSIGHTS_CONNECTION_STRING` is actually present in configuration - the same pattern as the database connection string, so a local run without one configured is a clean no-op rather than a startup failure.
 
+One thing worth being explicit about: with this OpenTelemetry-based distro, a plain `ILogger.LogError(exception, ...)` call lands in Application Insights' `traces` table, not its dedicated `exceptions` table - that's a real behavior difference from the older, classic Application Insights SDK, not an oversight. The global exception handler deliberately only marks the current `Activity` as an error and records the exception on it (which is what actually populates `exceptions` and the Failures view) for genuine faults - a 500, or the circuit breaker's 503. A 400 or 409 from a domain rule or booking conflict is a correct business outcome, not a fault, so it stays a log line and doesn't show up as a "failure" in monitoring, the same distinction the circuit breaker itself already makes.
+
+## Known limitations
+
+A few things were deliberately left out, given the size and intent of this challenge:
+
+- **No authentication.** Stated explicitly in the brief as not required.
+- **No pagination** on hotel search or room availability. A production system covering many hotels would need it; six rooms across two seeded hotels doesn't.
+- **`Address` is a single string**, not structured fields (street, city, postcode). Fine for this scope, would need normalizing for anything address-validation-related.
+- **`Guest` isn't a reusable customer identity.** It's scoped to one reservation, so the same person booking twice creates two separate `Guest` rows. Real guest/customer identity wasn't asked for and would add scope disproportionate to the brief.
+- **No rate limiting** on the public endpoints.
+
 ## How this was built
 
-The solution is being built as a sequence of steps, each one buildable and reviewable on its own. The CI/CD pipeline grows the same way: a build gate from step 02, test running added once step 03 has unit tests, and deployment added once step 04 has an actual database-backed app and real Azure resources to target. Azure deployment starts at step 04, not the last step, so everything built after that point is live-testable as it lands.
+The solution was built as a sequence of steps, each one buildable and reviewable on its own. The CI/CD pipeline grows the same way: a build gate from step 02, test running added once step 03 has unit tests, and deployment added once step 04 has an actual database-backed app and real Azure resources to target. Azure deployment starts at step 04, not the last step, so everything built after that point is live-testable as it lands.
 
 | Step | Focus | Testing |
 |---|---|---|
@@ -136,6 +158,8 @@ The solution is being built as a sequence of steps, each one buildable and revie
 
 ## Use of AI assistance
 
-Claude Code took care of most of the typing on this project, from scaffolding through to implementation code, and helped get this documentation into shape too.
+Claude Code handled most of the typing on this project: scaffolding, implementation code, and getting this documentation into shape. The architecture and business-rule decisions were mine, made and reviewed before anything got built. That includes the data model, the `ReservationNight` design for stopping overbooking under concurrency, choosing App Service for hosting, dropping Service Bus and infrastructure-as-code as unnecessary for this scope, and how the work above got broken into steps.
 
-The architecture calls were mine: choosing App Service for hosting, the data model, the `ReservationNight` design for stopping overbooking, dropping Service Bus and infrastructure-as-code, and how the work above got broken into steps. Those were decided and reviewed before anything got built. AI assistance moved the actual typing along faster; it didn't pick the design.
+The involvement stayed hands-on well past the initial design, too. A few concrete examples: I caught that automated tests had been promised for the seed/reset endpoints but not actually written, and asked for them. I pushed back on scoping "find available rooms" to a hotel by default and asked for an unscoped, booking-site-style search instead, with the hotel as an optional filter. I questioned whether the booking-reference generator would retry on a collision, which turned up a real gap in the original design. And the ambiguous-date bug, where `07/09/2026` silently parsed as the wrong month and made an already-booked room look available, came from testing the deployed API by hand with real data, not from a code review.
+
+AI assistance made the implementation faster. The decisions, the pushback, and catching the bugs that mattered were mine.
